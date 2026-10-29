@@ -6,7 +6,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis msi"
   },
   "devDependencies": {
     "electron": "^33.2.1",
@@ -17,10 +17,16 @@
     "productName": "CamBridge",
     "directories": { "output": "release" },
     "files": ["main.cjs", "app/**/*"],
-    "win": { "target": ["nsis"], "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}" },
+    "win": { "target": ["nsis", "msi"], "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}" },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }

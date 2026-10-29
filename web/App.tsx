@@ -6,7 +6,14 @@ type Role = 'host' | 'viewer';
 type Phase = 'idle' | 'starting' | 'hosting' | 'joining' | 'connected';
 type Message = { type: string; [key: string]: any };
 type RangeCapability = { min: number; max: number; step?: number };
-type CameraCaps = { zoom?: RangeCapability; exposureCompensation?: RangeCapability; torch?: boolean; focusMode?: string[] };
+type RangeName = 'zoom' | 'exposureCompensation' | 'brightness' | 'colorTemperature' | 'contrast' | 'exposureTime' | 'focusDistance' | 'pan' | 'saturation' | 'sharpness' | 'tilt';
+type CameraCaps = Partial<Record<RangeName, RangeCapability>> & { torch?: boolean; focusMode?: string[]; whiteBalanceMode?: string[]; exposureMode?: string[] };
+const RANGE_NAMES: RangeName[] = ['zoom', 'exposureCompensation', 'brightness', 'colorTemperature', 'contrast', 'exposureTime', 'focusDistance', 'pan', 'saturation', 'sharpness', 'tilt'];
+const RANGE_LABELS: Record<RangeName, string> = {
+  zoom: 'Zoom', exposureCompensation: 'Exposure compensation', brightness: 'Brightness',
+  colorTemperature: 'Color temperature', contrast: 'Contrast', exposureTime: 'Exposure time',
+  focusDistance: 'Focus distance', pan: 'Pan', saturation: 'Saturation', sharpness: 'Sharpness', tilt: 'Tilt'
+};
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -20,12 +27,16 @@ function readParam(name: string) { return new URLSearchParams(window.location.se
 function capabilities(track: MediaStreamTrack): CameraCaps {
   const raw = track.getCapabilities() as any;
   const result: CameraCaps = {};
-  if (raw.zoom && Number.isFinite(raw.zoom.min) && Number.isFinite(raw.zoom.max))
-    result.zoom = { min: raw.zoom.min, max: raw.zoom.max, step: raw.zoom.step || 0.1 };
-  if (raw.exposureCompensation && Number.isFinite(raw.exposureCompensation.min) && Number.isFinite(raw.exposureCompensation.max))
-    result.exposureCompensation = { min: raw.exposureCompensation.min, max: raw.exposureCompensation.max, step: raw.exposureCompensation.step || 0.1 };
+  for (const name of RANGE_NAMES) {
+    const range = raw[name];
+    if (range && Number.isFinite(range.min) && Number.isFinite(range.max)) {
+      (result as any)[name] = { min: range.min, max: range.max, step: range.step || 0.1 };
+    }
+  }
   if (typeof raw.torch === 'boolean') result.torch = raw.torch;
   if (Array.isArray(raw.focusMode)) result.focusMode = raw.focusMode;
+  if (Array.isArray(raw.whiteBalanceMode)) result.whiteBalanceMode = raw.whiteBalanceMode;
+  if (Array.isArray(raw.exposureMode)) result.exposureMode = raw.exposureMode;
   return result;
 }
 
@@ -44,6 +55,7 @@ export default function App() {
   const [exposure, setExposure] = useState(0);
   const [torch, setTorch] = useState(false);
   const [focusMode, setFocusMode] = useState('continuous');
+  const [rangeValues, setRangeValues] = useState<Partial<Record<RangeName, number>>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -99,6 +111,7 @@ export default function App() {
     if (name === 'torch') setTorch(Boolean(value));
     if (name === 'exposureCompensation') setExposure(Number(value));
     if (name === 'focusMode') setFocusMode(String(value));
+    if (RANGE_NAMES.includes(name as RangeName)) setRangeValues((previous) => ({ ...previous, [name]: Number(value) }));
   }, [sendSocket]);
 
   const sendCapabilities = useCallback(() => {
@@ -118,16 +131,16 @@ export default function App() {
     if (!track) return;
     try {
       const setting: any = {};
-      if (name === 'zoom') setting.zoom = Number(value);
-      else if (name === 'torch') setting.torch = Boolean(value);
-      else if (name === 'exposureCompensation') setting.exposureCompensation = Number(value);
-      else if (name === 'focusMode') setting.focusMode = String(value);
+      if (name === 'torch') setting.torch = Boolean(value);
+      else if (['focusMode', 'whiteBalanceMode', 'exposureMode'].includes(name)) setting[name] = String(value);
+      else if (RANGE_NAMES.includes(name as RangeName)) setting[name] = Number(value);
       else return;
       await track.applyConstraints({ advanced: [setting] } as unknown as MediaTrackConstraints);
       if (name === 'zoom') setZoom(Number(value));
       if (name === 'torch') setTorch(Boolean(value));
       if (name === 'exposureCompensation') setExposure(Number(value));
       if (name === 'focusMode') setFocusMode(String(value));
+      if (RANGE_NAMES.includes(name as RangeName)) setRangeValues((previous) => ({ ...previous, [name]: Number(value) }));
       const result = JSON.stringify({ type: 'control-result', name, ok: true });
       if (channelRef.current?.readyState === 'open') channelRef.current.send(result);
       else sendSocket({ type: 'control-result', name, ok: true });
@@ -290,6 +303,9 @@ export default function App() {
       const current = stream.getVideoTracks()[0].getSettings() as any;
       if (typeof current.zoom === 'number') setZoom(current.zoom);
       if (typeof current.exposureCompensation === 'number') setExposure(current.exposureCompensation);
+      const observedRanges: Partial<Record<RangeName, number>> = {};
+      for (const name of RANGE_NAMES) if (typeof current[name] === 'number') observedRanges[name] = current[name];
+      setRangeValues(observedRanges);
       setDevices((await navigator.mediaDevices.enumerateDevices()).filter((item) => item.kind === 'videoinput'));
       roleRef.current = 'host'; setRole('host'); setStatus('Connecting to signaling server…');
       if (!openSocket('host')) { stream.getTracks().forEach((track) => track.stop()); streamRef.current = null; setPhase('idle'); }
@@ -418,9 +434,16 @@ export default function App() {
               <div className="section-heading controls-heading"><div><span className="step-label">02 / SETTINGS</span><h2>{host ? 'Camera settings' : 'Remote camera settings'}</h2></div><span className="helper">Device-dependent</span></div>
               {caps.zoom && <div className="control-row"><div><span className="control-name"><Focus size={16} /> Zoom</span><span className="control-value">{zoom.toFixed(1)}×</span></div><input type="range" min={caps.zoom.min} max={caps.zoom.max} step={caps.zoom.step || 0.1} value={Math.min(caps.zoom.max, Math.max(caps.zoom.min, zoom))} onChange={(e) => sendControl('zoom', Number(e.target.value))} /></div>}
               {caps.exposureCompensation && <div className="control-row"><div><span className="control-name"><Gauge size={16} /> Exposure compensation</span><span className="control-value">{exposure.toFixed(1)}</span></div><input type="range" min={caps.exposureCompensation.min} max={caps.exposureCompensation.max} step={caps.exposureCompensation.step || 0.1} value={Math.min(caps.exposureCompensation.max, Math.max(caps.exposureCompensation.min, exposure))} onChange={(e) => sendControl('exposureCompensation', Number(e.target.value))} /></div>}
+              {RANGE_NAMES.filter((name) => name !== 'zoom' && name !== 'exposureCompensation' && caps[name]).map((name) => {
+                const range = caps[name]!;
+                const value = rangeValues[name] ?? (range.min + range.max) / 2;
+                return <div className="control-row" key={name}><div><span className="control-name"><Gauge size={16} /> {RANGE_LABELS[name]}</span><span className="control-value">{value.toFixed(2)}</span></div><input type="range" min={range.min} max={range.max} step={range.step || 0.1} value={Math.min(range.max, Math.max(range.min, value))} onChange={(e) => sendControl(name, Number(e.target.value))} /></div>;
+              })}
               {caps.focusMode?.length && <div className="control-row"><div><span className="control-name"><Focus size={16} /> Focus mode</span><span className="control-value">{focusMode}</span></div><select value={focusMode} onChange={(e) => sendControl('focusMode', e.target.value)}>{caps.focusMode.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>}
+              {caps.whiteBalanceMode?.length && <div className="control-row"><div><span className="control-name"><Settings2 size={16} /> White balance</span></div><select onChange={(e) => sendControl('whiteBalanceMode', e.target.value)} defaultValue={caps.whiteBalanceMode[0]}>{caps.whiteBalanceMode.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>}
+              {caps.exposureMode?.length && <div className="control-row"><div><span className="control-name"><Gauge size={16} /> Exposure mode</span></div><select onChange={(e) => sendControl('exposureMode', e.target.value)} defaultValue={caps.exposureMode[0]}>{caps.exposureMode.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>}
               {caps.torch !== undefined && <div className="control-row torch-row"><div><span className="control-name"><Camera size={16} /> Camera light</span><span className="control-description">Toggle the torch, if supported.</span></div><button className={'toggle-button ' + (torch ? 'on' : '')} onClick={() => sendControl('torch', !torch)} aria-pressed={torch}><span /></button></div>}
-              {!caps.zoom && !caps.exposureCompensation && !caps.focusMode?.length && caps.torch === undefined && <p className="empty-controls"><Settings2 size={17} />This browser does not expose adjustable settings for this camera.</p>}
+              {!Object.keys(caps).some((name) => name === 'torch' || name === 'focusMode' || name === 'whiteBalanceMode' || name === 'exposureMode' || RANGE_NAMES.includes(name as RangeName)) && <p className="empty-controls"><Settings2 size={17} />This browser does not expose adjustable settings for this camera.</p>}
             </div>}
             <div className="bottom-actions">{live ? <button className="danger-button" onClick={stopSession}><X size={16} /> Stop sharing / disconnect</button> : <button className="text-button" onClick={() => { setRole(null); setError(''); setStatus('Ready to connect'); }}><RefreshCw size={14} /> Reset selection</button>}<span className="footnote"><ShieldCheck size={13} /> Camera permission is controlled by your device.</span></div>
           </div>

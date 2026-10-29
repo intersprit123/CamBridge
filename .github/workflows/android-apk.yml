@@ -3,7 +3,7 @@ name: Android APK preview
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    tags: ['android-v*']
 
 jobs:
   apk:

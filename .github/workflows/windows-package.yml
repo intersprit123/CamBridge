@@ -1,0 +1,30 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build
+      - name: Prepare desktop app files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/app | Out-Null
+          Copy-Item -Path dist/* -Destination desktop/app -Recurse -Force
+      - run: npm --prefix desktop install
+      - run: npm --prefix desktop run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CamBridge-Windows-Setup
+          path: desktop/release/*.exe
+          if-no-files-found: error

@@ -10,9 +10,12 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "desktop:dev": "npm run build && npm --prefix desktop start",
-    "desktop:dist": "npm run build && npm --prefix desktop run dist"
+    "desktop:dist": "npm run build && npm --prefix desktop run dist",
+    "mobile:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
     "express": "^4.21.2",
     "lucide-react": "^0.468.0",
     "qrcode.react": "^4.2.0",
@@ -21,6 +24,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",

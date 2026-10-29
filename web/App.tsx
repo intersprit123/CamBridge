@@ -62,12 +62,26 @@ export default function App() {
   const joinUrl = useMemo(() => {
     if (!roomCode) return '';
     try {
+      const nativeAndroid = Boolean((window as any).Capacitor?.isNativePlatform?.());
       const fromDesktop = window.location.protocol === 'file:';
-      const address = fromDesktop ? lanAddresses[0] : window.location.hostname;
-      if (!address) return '';
-      const url = new URL(fromDesktop ? 'http://' + address + ':8787/' : window.location.href);
+      let pageAddress = window.location.hostname;
+      let endpoint = signalUrl;
+      let pageRoot = window.location.href;
+      if (fromDesktop) {
+        pageAddress = lanAddresses[0] || '';
+        if (!pageAddress) return '';
+        endpoint = 'ws://' + pageAddress + ':8787';
+        pageRoot = 'http://' + pageAddress + ':8787/';
+      } else if (nativeAndroid) {
+        const signal = new URL(signalUrl);
+        pageAddress = signal.hostname;
+        const port = signal.port || '8787';
+        pageRoot = 'http://' + pageAddress + ':' + port + '/';
+      }
+      if (!pageAddress) return '';
+      const url = new URL(pageRoot);
       url.searchParams.set('join', roomCode);
-      url.searchParams.set('signal', fromDesktop ? 'ws://' + address + ':8787' : signalUrl);
+      url.searchParams.set('signal', endpoint);
       return url.toString();
     } catch { return ''; }
   }, [roomCode, signalUrl, lanAddresses]);
@@ -310,14 +324,21 @@ export default function App() {
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices().then((all) => setDevices(all.filter((item) => item.kind === 'videoinput'))).catch(() => undefined);
-    const hostName = window.location.hostname || '127.0.0.1';
-    fetch('http://' + hostName + ':8787/api/info').then((response) => response.ok ? response.json() : null).then((info) => {
-      if (info && Array.isArray(info.addresses)) setLanAddresses(info.addresses.filter((address: unknown) => typeof address === 'string'));
-    }).catch(() => undefined);
-    return () => {
-      socketRef.current?.close(); pcRef.current?.close();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const signal = new URL(signalUrl);
+      const apiOrigin = (signal.protocol === 'wss:' ? 'https:' : 'http:') + '//' + signal.host;
+      fetch(apiOrigin + '/api/info').then((response) => response.ok ? response.json() : null).then((info) => {
+        if (info && Array.isArray(info.addresses)) setLanAddresses(info.addresses.filter((address: unknown) => typeof address === 'string'));
+      }).catch(() => undefined);
+    } catch { /* signaling URL is being edited */ }
+  }, [signalUrl]);
+
+  useEffect(() => () => {
+    socketRef.current?.close(); pcRef.current?.close();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
   return (

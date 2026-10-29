@@ -3,6 +3,7 @@ name: Android APK preview
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['android-v*']
 
 jobs:
@@ -25,6 +26,7 @@ jobs:
           rmdir android 2>/dev/null || true
           npx cap add android
           npx cap sync android
+          node scripts/patch-android-preview.mjs
       - name: Build debug APK
         run: |
           cd android

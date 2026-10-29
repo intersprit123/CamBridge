@@ -23,7 +23,7 @@
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["main.cjs", "app/**/*", "node_modules/**/*"],
     "win": {
-      "icon": "build/icon.svg",
+      "icon": "build/icon.ico",
       "target": ["nsis", "msi"],
       "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}"
     },

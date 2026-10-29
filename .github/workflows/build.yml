@@ -13,27 +13,64 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - run: npm run build
+      - name: Run tests
+        run: npm test
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: cambridge-web-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
   android-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-      - name: Check Android project files
+      - run: npm install
+      - name: Build Android APK when Gradle wrapper exists
+        shell: bash
         run: |
-          test -f android/settings.gradle
-          test -f android/app/build.gradle
-          test -f android/app/src/main/AndroidManifest.xml
           if [ -f android/gradlew ]; then
             cd android
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "::warning::Gradle wrapper is missing; Android APK build skipped."
+            echo "::warning::android/gradlew is missing; APK build cannot run yet."
+            exit 0
           fi
+      - name: Upload Android APK
+        if: success() && hashFiles('android/app/build/outputs/apk/debug/*.apk') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cambridge-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run desktop:dist
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: cambridge-windows-installers
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.msi
+          if-no-files-found: warn
+          retention-days: 14

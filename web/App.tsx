@@ -47,6 +47,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [lanAddresses, setLanAddresses] = useState<string[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
@@ -59,14 +60,17 @@ export default function App() {
   const host = role === 'host';
 
   const joinUrl = useMemo(() => {
-    if (!roomCode || window.location.protocol === 'file:') return '';
+    if (!roomCode) return '';
     try {
-      const url = new URL(window.location.href);
+      const fromDesktop = window.location.protocol === 'file:';
+      const address = fromDesktop ? lanAddresses[0] : window.location.hostname;
+      if (!address) return '';
+      const url = new URL(fromDesktop ? 'http://' + address + ':8787/' : window.location.href);
       url.searchParams.set('join', roomCode);
-      url.searchParams.set('signal', signalUrl);
+      url.searchParams.set('signal', fromDesktop ? 'ws://' + address + ':8787' : signalUrl);
       return url.toString();
     } catch { return ''; }
-  }, [roomCode, signalUrl]);
+  }, [roomCode, signalUrl, lanAddresses]);
 
   const sendSocket = useCallback((data: Message) => {
     const ws = socketRef.current;
@@ -306,6 +310,10 @@ export default function App() {
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices().then((all) => setDevices(all.filter((item) => item.kind === 'videoinput'))).catch(() => undefined);
+    const hostName = window.location.hostname || '127.0.0.1';
+    fetch('http://' + hostName + ':8787/api/info').then((response) => response.ok ? response.json() : null).then((info) => {
+      if (info && Array.isArray(info.addresses)) setLanAddresses(info.addresses.filter((address: unknown) => typeof address === 'string'));
+    }).catch(() => undefined);
     return () => {
       socketRef.current?.close(); pcRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -369,6 +377,7 @@ export default function App() {
             {(phase === 'hosting' || phase === 'connected') && host && <div className="share-panel">
               <div className="share-code-head"><div><span className="step-label">YOUR PAIRING CODE</span><h3>{roomCode || 'Creating code…'}</h3></div><button className="secondary-button" onClick={() => void copyText(roomCode)}><Copy size={15} />{copied ? 'Copied' : 'Copy code'}</button></div>
               <p className="helper">Only share this code with someone you trust.</p>
+              {lanAddresses.length > 0 && <p className="helper">LAN address: {lanAddresses[0]}:8787</p>}
               {joinUrl && <div className="qr-row"><QRCodeSVG value={joinUrl} size={104} bgColor="#fff" fgColor="#121622" level="M" /><div><b>Scan to pair</b><p>Open the same web app on the other device and scan the QR code, or send the link.</p><button className="text-button" onClick={() => void copyText(joinUrl)}>Copy pairing link</button></div></div>}
             </div>}
             {live && role === 'viewer' && <div className="share-panel connected-panel"><div><span className="step-label">CONNECTED TO</span><h3>Camera {roomCode}</h3><p className="helper">Settings controls appear when supported by the camera.</p></div></div>}

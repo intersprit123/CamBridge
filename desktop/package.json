@@ -1,0 +1,28 @@
+{
+  "name": "cambridge-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CamBridge camera sharing and remote camera control",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.cambridge.desktop",
+    "productName": "CamBridge",
+    "directories": { "output": "release" },
+    "files": ["main.cjs", "app/**/*"],
+    "win": { "target": ["nsis"], "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

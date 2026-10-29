@@ -8,6 +8,10 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis msi"
   },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8"
@@ -16,7 +20,7 @@
     "appId": "dev.cambridge.desktop",
     "productName": "CamBridge",
     "directories": { "output": "release" },
-    "files": ["main.cjs", "app/**/*"],
+    "files": ["main.cjs", "app/**/*", "node_modules/**/*"],
     "win": { "target": ["nsis", "msi"], "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}" },
     "nsis": {
       "oneClick": false,

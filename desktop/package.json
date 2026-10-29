@@ -2,6 +2,7 @@
   "name": "cambridge-desktop",
   "version": "0.1.0",
   "private": true,
+  "author": "CamBridge contributors",
   "description": "CamBridge camera sharing and remote camera control",
   "main": "main.cjs",
   "scripts": {
@@ -19,9 +20,13 @@
   "build": {
     "appId": "dev.cambridge.desktop",
     "productName": "CamBridge",
-    "directories": { "output": "release" },
+    "directories": { "output": "release", "buildResources": "build" },
     "files": ["main.cjs", "app/**/*", "node_modules/**/*"],
-    "win": { "target": ["nsis", "msi"], "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}" },
+    "win": {
+      "icon": "build/icon.svg",
+      "target": ["nsis", "msi"],
+      "artifactName": "CamBridge-Setup-${version}-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
